@@ -11,9 +11,9 @@
 
 **Complete Structure** (to be implemented):
 ```
-orf_entropy/
+dna23di/
   src/
-    orf_entropy/
+    dna23di/
       __init__.py
       config.py              # Configuration and constants
       errors.py              # Custom exceptions
