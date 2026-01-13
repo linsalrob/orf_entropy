@@ -2,6 +2,8 @@
 
 import subprocess
 import tempfile
+import re
+import sys
 from pathlib import Path
 from typing import Dict, List, Union
 
@@ -36,7 +38,7 @@ def find_orfs(
     # Check if binary exists
     try:
         result = subprocess.run(
-            [binary_path, "-h"],
+            [binary_path, "-v"],
             capture_output=True,
             text=True,
             timeout=5,
@@ -60,12 +62,12 @@ def find_orfs(
     
     try:
         # Run get_orfs
-        # Expected command: get_orfs -f fasta_file -t table_id -m min_length
+        # Expected command: get_orfs -f fasta_file -t table_id -l min_length
         cmd = [
             binary_path,
             "-f", tmp_fasta_path,
             "-t", str(table_id),
-            "-m", str(min_nt_length),
+            "-l", str(min_nt_length),
         ]
         
         result = subprocess.run(
@@ -86,17 +88,88 @@ def find_orfs(
         # Clean up temporary file
         Path(tmp_fasta_path).unlink(missing_ok=True)
 
+def _parse_orf_header_line(header: str, table_id: int) -> OrfRecord:
+
+    FASTA_RE = re.compile(
+    r"""
+        ^>
+        (?P<parent_id>[^-\s]+)      # JQ995537
+        -
+        (?P<orf_id>orf\d+)          # orf14635
+        \s+
+        \[
+            (?P=parent_id)          # repeat accession
+            \s+frame\s+
+            (?P<frame>[+-]?\d+)
+            \s+
+            (?P<start>\d+)
+            \s+
+            (?P<end>\d+)
+        \]
+        $
+    """,
+    re.VERBOSE
+    )
+
+    m = FASTA_RE.match(header)
+    if not m:
+        raise ValueError("Header did not match expected format")
+
+    data = m.groupdict()
+    strand = '+'
+    if int(data['frame']) < 0:
+        strand = '-'
+
+    orf = OrfRecord(
+        parent_id=data['parent_id'],
+        orf_id=data['orf_id'],
+        start=int(data["start"]),
+        end=int(data["end"]),
+        frame=abs(int(data["frame"])),
+        strand=strand,
+        nt_sequence="",
+        aa_sequence="",
+        table_id=table_id,
+        has_start_codon=False,
+        has_stop_codon=False
+    )
+
+    return orf
+
+def reverse_complement(seq: str) -> str:
+    """Return the reverse complement of a DNA sequence."""
+    complement = str.maketrans("ACGTacgt", "TGCAtgca")
+    return seq.translate(complement)[::-1]
+
+def _extract_orf_dna_sequence(sequences: Dict[str, str], current_orf: OrfRecord) -> str:
+    """
+    Extract the sequence from sequences
+    """
+
+    if current_orf.parent_id not in sequences:
+        raise ValueError(f"We were asked to extract an orf for {current_orf.parent_id} but it is not in our sequences: {sequences.keys()}")
+
+    if current_orf.start < 1 or current_orf.end < 1:
+        raise ValueError("Coordinates must be >= 1")
+
+    if current_orf.end < current_orf.start:
+        raise ValueError("End coordinate precedes start coordinate")
+
+    # Convert to Python slicing (0-based, end-exclusive)
+    dna = sequences[current_orf.parent_id]
+    orf_seq = dna[current_orf.start - 1 : current_orf.end]
+
+    if current_orf.strand == '-':
+        orf_seq = reverse_complement(orf_seq)
+
+    return orf_seq
 
 def _parse_get_orfs_output(
     output: str, sequences: Dict[str, str], table_id: int
 ) -> List[OrfRecord]:
     """Parse get_orfs output into OrfRecord objects.
     
-    Expected output format (tab-separated):
-    seq_id  start  end  strand  frame  has_start  has_stop  sequence
-    
-    Note: This is a placeholder implementation. The actual parsing depends on
-    the output format of get_orfs. This may need to be adjusted.
+    Format: >JQ995537-orf14635 [JQ995537 frame -3 96951 97093]
     
     Args:
         output: stdout from get_orfs
@@ -107,50 +180,23 @@ def _parse_get_orfs_output(
         List of OrfRecord objects
     """
     orfs = []
+    current_orf = None
     
     for line in output.strip().split("\n"):
-        if not line or line.startswith("#"):
-            continue
-        
-        parts = line.split("\t")
-        if len(parts) < 7:
-            continue
-        
         try:
-            parent_id = parts[0]
-            start = int(parts[1])
-            end = int(parts[2])
-            strand = parts[3]
-            frame = int(parts[4])
-            has_start = parts[5].lower() in ("true", "1", "yes")
-            has_stop = parts[6].lower() in ("true", "1", "yes")
-            
-            # Extract sequence
-            if parent_id not in sequences:
-                continue
-            
-            parent_seq = sequences[parent_id]
-            nt_sequence = parent_seq[start:end]
-            
-            # Generate unique ORF ID
-            orf_id = f"{parent_id}_orf_{start}_{end}_{strand}_f{frame}"
-            
-            orf = OrfRecord(
-                parent_id=parent_id,
-                orf_id=orf_id,
-                start=start,
-                end=end,
-                strand=strand,
-                frame=frame,
-                nt_sequence=nt_sequence,
-                table_id=table_id,
-                has_start_codon=has_start,
-                has_stop_codon=has_stop,
-            )
-            orfs.append(orf)
-            
+            line = line.rstrip('\r\n')
+            if line.startswith(">"):
+                if current_orf is not None:
+                    current_orf.nt_sequence = _extract_orf_dna_sequence(sequences, current_orf)
+                    current_orf.has_start_codon = True if 'M' in current_orf.aa_sequence else False
+                    current_orf.has_stop_codon  = True if '*' in current_orf.aa_sequence else False
+                    orfs.append(current_orf)
+                current_orf = _parse_orf_header_line(line, table_id)
+            else:
+                current_orf.aa_sequence += line.strip()
         except (ValueError, IndexError) as e:
-            # Skip malformed lines
+            print(f"Error handling sequence {line}", file=sys.stderr)
+            raise Exception(f"Error as {e}")
             continue
     
     return orfs

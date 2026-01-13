@@ -66,6 +66,9 @@ def translate_orf(orf: OrfRecord, table_id: int = DEFAULT_GENETIC_CODE_TABLE) ->
         # Translate sequence
         # Note: genetic_code.translate() should handle ambiguous codons
         aa_sequence = genetic_code.translate(orf.nt_sequence)
+
+        if aa_sequence != orf.aa_sequence:
+            raise ValueError(f"Translated amino acid sequence is not the same as read from the file:\nProvided:\n{orf.aa_sequence}\nTranslated:\n{aa_sequence}")
         
         # Remove stop codon (*) if present at the end
         if aa_sequence.endswith("*"):

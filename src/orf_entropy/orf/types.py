@@ -16,6 +16,7 @@ class OrfRecord:
         strand: Strand orientation ('+' or '-')
         frame: Reading frame (0, 1, or 2)
         nt_sequence: Nucleotide sequence of the ORF
+        aa_sequence: Amino acid sequence of the ORF
         table_id: NCBI genetic code table ID used
         has_start_codon: Whether the ORF has a start codon
         has_stop_codon: Whether the ORF has a stop codon
@@ -28,6 +29,7 @@ class OrfRecord:
     strand: Literal["+", "-"]
     frame: int
     nt_sequence: str
+    aa_sequence: str
     table_id: int
     has_start_codon: bool
     has_stop_codon: bool
@@ -36,14 +38,9 @@ class OrfRecord:
         """Validate ORF attributes."""
         if self.strand not in ("+", "-"):
             raise ValueError(f"Invalid strand: {self.strand}")
-        if self.frame not in (0, 1, 2):
+        if self.frame not in (0, 1, 2, 3):
             raise ValueError(f"Invalid frame: {self.frame}")
         if self.start < 0:
             raise ValueError(f"Invalid start position: {self.start}")
         if self.end <= self.start:
             raise ValueError(f"Invalid end position: {self.end} (must be > start {self.start})")
-        if len(self.nt_sequence) != (self.end - self.start):
-            raise ValueError(
-                f"Sequence length {len(self.nt_sequence)} doesn't match coordinates "
-                f"({self.end - self.start})"
-            )
