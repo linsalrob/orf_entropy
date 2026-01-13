@@ -157,10 +157,10 @@ def _extract_orf_dna_sequence(sequences: Dict[str, str], current_orf: OrfRecord)
 
     # Convert to Python slicing (0-based, end-exclusive)
     dna = sequences[current_orf.parent_id]
-    orf_seq = dna[current_orf.start - 1 : current_orf.end]
-
     if current_orf.strand == '-':
-        orf_seq = reverse_complement(orf_seq)
+        dna = reverse_complement(dna)
+    
+    orf_seq = dna[current_orf.start - 1 : current_orf.end]
 
     return orf_seq
 

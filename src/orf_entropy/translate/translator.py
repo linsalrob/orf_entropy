@@ -3,11 +3,7 @@
 from dataclasses import dataclass
 from typing import List
 
-try:
-    from genetic_codes import GeneticCode
-except ImportError:
-    # If pygenetic-code is not installed, provide a fallback or raise a helpful error
-    GeneticCode = None
+import PyGeneticCode
 
 from ..config import DEFAULT_GENETIC_CODE_TABLE
 from ..errors import TranslationError
@@ -53,22 +49,25 @@ def translate_orf(orf: OrfRecord, table_id: int = DEFAULT_GENETIC_CODE_TABLE) ->
     Raises:
         TranslationError: If translation fails
     """
-    if GeneticCode is None:
-        raise TranslationError(
-            "pygenetic-code package not installed. "
-            "Install with: pip install pygenetic-code"
-        )
     
     try:
-        # Load genetic code
-        genetic_code = GeneticCode.from_ncbi_id(table_id)
         
         # Translate sequence
-        # Note: genetic_code.translate() should handle ambiguous codons
-        aa_sequence = genetic_code.translate(orf.nt_sequence)
+        aa_sequence = PyGeneticCode.translate(orf.nt_sequence, table_id)
 
         if aa_sequence != orf.aa_sequence:
-            raise ValueError(f"Translated amino acid sequence is not the same as read from the file:\nProvided:\n{orf.aa_sequence}\nTranslated:\n{aa_sequence}")
+            errmsg = f"""
+            Translated amino acid sequence is not the same as read from the file:
+            Provided:
+            {orf.aa_sequence}
+            Translated:
+            {aa_sequence}
+            DNA sequence:
+            {orf.nt_sequence}
+            Location:
+            Start: {orf.start} Stop: {orf.end} Frame: {orf.frame} Strand: {orf.strand}
+            """
+            raise ValueError(errmsg)
         
         # Remove stop codon (*) if present at the end
         if aa_sequence.endswith("*"):
