@@ -44,7 +44,7 @@ def encode3di_command(
     ),
 ) -> None:
     """Encode proteins to 3Di structural tokens.
-    
+
     Uses ProstT5 model to predict 3Di structural alphabet tokens
     directly from amino acid sequences.
     """
@@ -53,10 +53,10 @@ def encode3di_command(
         from ...io.jsonio import read_json, write_json
         from ...orf.types import OrfRecord
         from ...translate.translator import ProteinRecord
-        
+
         typer.echo(f"Reading proteins from: {input}")
         protein_data = read_json(input)
-        
+
         # Reconstruct ProteinRecord objects
         if isinstance(protein_data, list):
             proteins = []
@@ -70,22 +70,22 @@ def encode3di_command(
                 proteins.append(protein)
         else:
             raise ValueError("Invalid protein JSON format")
-        
+
         typer.echo(f"  Loaded {len(proteins)} protein(s)")
-        
+
         typer.echo(f"\nInitializing ProstT5 encoder (model: {model})...")
         encoder = ProstT5ThreeDiEncoder(model_name=model, device=device)
         typer.echo(f"  Using device: {encoder.device}")
-        
+
         typer.echo(f"\nEncoding to 3Di tokens...")
-        three_dis = encoder.encode_proteins(proteins, batch_size=batch_size)
+        three_dis = encoder.encode_proteins(proteins)
         typer.echo(f"  Encoded {len(three_dis)} sequence(s)")
-        
+
         typer.echo(f"\nWriting results to: {output}")
         write_json(three_dis, output)
-        
+
         typer.echo("✓ 3Di encoding complete!")
-        
+
     except Exception as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(3)

@@ -15,7 +15,7 @@ DEFAULT_MIN_AA_LENGTH = 30  # amino acids
 
 # ProstT5 model configuration
 DEFAULT_PROSTT5_MODEL = "Rostlab/ProstT5_fp16"
-DEFAULT_BATCH_SIZE = 4
+DEFAULT_BATCH_SIZE = 10
 
 # 3Di alphabet (20 structural states)
 THREEDDI_ALPHABET = set("ACDEFGHIKLMNPQRSTVWY")
@@ -33,7 +33,7 @@ GET_ORFS_BINARY = os.environ.get("GET_ORFS_PATH", "get_orfs")
 
 # Device selection for PyTorch
 AUTO_DEVICE = "auto"
-CUDA_DEVICE = "cuda"
+CUDA_DEVICE = "cuda:0"
 MPS_DEVICE = "mps"
 CPU_DEVICE = "cpu"
 
