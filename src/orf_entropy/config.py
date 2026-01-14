@@ -33,7 +33,7 @@ GET_ORFS_BINARY = os.environ.get("GET_ORFS_PATH", "get_orfs")
 
 # Device selection for PyTorch
 AUTO_DEVICE = "auto"
-CUDA_DEVICE = "cuda:0"
+CUDA_DEVICE = "cuda"
 MPS_DEVICE = "mps"
 CPU_DEVICE = "cpu"
 
