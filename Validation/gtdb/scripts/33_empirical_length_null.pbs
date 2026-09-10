@@ -1,0 +1,72 @@
+#!/bin/bash
+#PBS -N gtdb_length_null
+#PBS -q normal
+#PBS -P ob80
+#PBS -l ncpus=24
+#PBS -l mem=96GB
+#PBS -l jobfs=100GB
+#PBS -l walltime=03:00:00
+#PBS -l storage=gdata/ob80+scratch/ob80
+#PBS -l wd
+#PBS -j oe
+#PBS -o /g/data/ob80/re3494/gtdb_entropy/logs/length_null.log
+#
+# Length-conditioned EMPIRICAL entropy distributions over the whole ORF
+# population -- the calibrated companion to the random null of stage 31.
+#
+# Reads the same 143 GB of entropy_rows once, accumulating a 2-D
+# (length bin x entropy bin) histogram per alphabet per stratum. Strata match
+# population_agg.c exactly, so the marginals must reproduce stage 29; that
+# agreement is the cross-check and the summariser refuses to publish without
+# its own histogram-vs-counter check passing.
+#
+# Workers dump binary, not text: sparse text would be hundreds of millions of
+# lines over the run, more to recombine than to produce. Partials are KEPT --
+# the stage 29 lesson that an aggregation discarding its intermediates buys
+# exactly one answer, and a second answer costs another full read.
+
+set -euo pipefail
+
+DATA=/g/data/ob80/re3494/gtdb_entropy
+SRC="${SRC:-/g/data/ob80/re3494/Projects/genome_entropy/claude}"
+OUT="${OUT:-$DATA/entropy_null/empirical}"
+PY=/g/data/ob80/re3494/conda/genome_entropy/bin/python
+NPROC=${NPROC:-24}
+
+mkdir -p "$OUT" "$DATA/logs"
+gcc -O2 -o "$PBS_JOBFS/length_agg" "$SRC/length_entropy_agg.c"
+
+for dom in bac arc; do
+    awk -F'\t' 'NR>1{print $1"\t"($5=="True"?1:0)}' \
+        "$DATA/genome_cds_counts_${dom}.tsv" > "$PBS_JOBFS/cdsflag_${dom}.tsv"
+done
+
+run_domain() {
+    local dom=$1
+    local pdir="$PBS_JOBFS/partials_$dom"
+    mkdir -p "$pdir"
+    ls "$DATA/entropy_rows/$dom"/*.tsv.gz | sort > "$PBS_JOBFS/files_$dom"
+    local nf; nf=$(wc -l < "$PBS_JOBFS/files_$dom")
+    echo "$(date -Is) $dom: $nf chunks over $NPROC workers"
+    seq 0 $((NPROC - 1)) | xargs -P "$NPROC" -I{} bash -c '
+        w=$1; pdir=$2; dom=$3; np=$4
+        awk -v w="$w" -v np="$np" "NR%np==w" "$PBS_JOBFS/files_$dom" > "$pdir/files.$w"
+        if [ -s "$pdir/files.$w" ]; then
+            xargs -a "$pdir/files.$w" gzip -dc \
+                | "$PBS_JOBFS/length_agg" "$PBS_JOBFS/cdsflag_$dom.tsv" \
+                  "$pdir/part.$w.bin" > "$pdir/part.$w.txt"
+        fi
+    ' _ {} "$pdir" "$dom" "$NPROC"
+    echo "$(date -Is) $dom: aggregation done, combining"
+    "$PY" "$SRC/33_length_null_summary.py" "$dom" \
+        "$OUT/length_entropy_${dom}.tsv" "$OUT/length_entropy_${dom}.npz" \
+        "$pdir"/part.*.bin
+    mkdir -p "$OUT/partials_$dom"
+    for f in "$pdir"/part.*.bin; do gzip -c "$f" > "$OUT/partials_$dom/$(basename "$f").gz"; done
+    cp "$pdir"/part.*.txt "$OUT/partials_$dom/"
+}
+
+for dom in arc bac; do run_domain "$dom"; done
+
+echo "$(date -Is) done"
+ls -la "$OUT"

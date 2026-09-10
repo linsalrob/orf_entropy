@@ -146,6 +146,34 @@ did not exist yet.
   was right; the sentence explaining it was not, and nothing checked it because
   the conclusion was correct.
 
+## Stages 30-33: the length-conditioned entropy references
+
+`30` recovers residue composition from the packed JSON (the entropy rows carry
+none), `31` simulates the random reference, `33` builds the empirical one over
+all 2.62 billion rows, and `32` scores against either or both. See §4.2.
+
+Three lessons worth carrying:
+
+- **A statistic's null has to match the statistic.** Shannon entropy is
+  permutation-invariant, so the obvious shuffle null has zero variance and
+  measures nothing. The i.i.d. null is the right shape, but it models only
+  multinomial sampling noise, and real between-protein composition variance is
+  far larger — so its z has sd 3-7 rather than 1 and its percentile is not a
+  significance statement. The reference that calibrates is the empirical
+  distribution of real ORFs at the same length.
+- **Test calibration on a representative sample, not a convenient one.** Two
+  attempts to check the empirical table scored the head of one chunk, then of
+  eighteen chunks, and both showed a tilted distribution that looked like a
+  defect in the table. The head of a chunk is its first few genomes. Against a
+  systematic sample of the population the table is exact (z sd 0.9986). The
+  second attempt is the instructive one: spreading over more chunks did not
+  help, because the bias was in taking the head of each, not in using too few.
+- **Do not carry an approximation's failure mode across from a toy case.** The
+  asymptotic entropy variance degenerates for exactly uniform p, and a
+  prototype built on uniform p suggested the analytic interval was unusable for
+  protein. Against the real composition it is 26% too narrow at 90 aa and 9% at
+  300 aa — a real error worth avoiding, but not the one the prototype implied.
+
 ## The defect family this run kept producing
 
 > A stage verifies whatever inputs happen to be present, then publishes an
